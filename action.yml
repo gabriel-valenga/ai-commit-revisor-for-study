@@ -1,0 +1,31 @@
+name: AI Commit Review (Study Mode)
+description: Pedagogical AI-based review of Python commits after they are created
+author: Gabriel
+
+inputs:
+  openai_api_key:
+    description: OpenAI API key (store it as a GitHub secret)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        pip install requests
+
+    - name: Run AI commit review
+      shell: bash
+      env:
+        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.sha }}
+      run: |
+        python ${{ github.action_path }}/ai_commit_review.py
