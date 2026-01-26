@@ -7,6 +7,10 @@ A reusable GitHub Action that performs pedagogical AI-based reviews of Python co
 This Action is designed for learning and self-review.
 It intentionally runs **after commits**, not before, to avoid AI-driven code generation during development.
 
+## Important notices:
+
+The OPENAI API is not free, you have to buy credits in the OPENAI platform to use this script
+
 ## How It Works
 
 - Runs on every push
