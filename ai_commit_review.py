@@ -7,11 +7,11 @@ import textwrap
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 REPO = os.environ["GITHUB_REPOSITORY"]
-COMMIT_SHA = os.environ["COMMIT_SHA"]
+COMMIT_SHA = os.environ["GITHUB_SHA"]
 
 # 1. Get the diff of the last commit
 diff = subprocess.check_output(
-    ["git", "diff", "HEAD~1", "HEAD"],
+    ["git", "show", "--format=", COMMIT_SHA],
     text=True
 )
 
@@ -45,7 +45,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
-        "model": "gpt-4o-mini",
+        "model": "gpt-4.1-mini",
         "temperature": 0.3,
         "messages": [
             {"role": "user", "content": prompt}
@@ -78,3 +78,6 @@ requests.post(
     },
     json={"body": comment_body},
 )
+
+print("GitHub response:", response.status_code)
+print(response.text)
