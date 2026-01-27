@@ -9,75 +9,103 @@ GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 REPO = os.environ["GITHUB_REPOSITORY"]
 COMMIT_SHA = os.environ["GITHUB_SHA"]
 
-# 1. Get the diff of the last commit
-diff = subprocess.check_output(
-    ["git", "show", "--format=", COMMIT_SHA],
-    text=True
-)
+def main():
 
-# 2. Limit diff size to control cost
-MAX_DIFF_SIZE = 6000
-if len(diff) > MAX_DIFF_SIZE:
-    diff = diff[:MAX_DIFF_SIZE] + "\n\n[Diff truncated for review]"
+    # 1. Get the diff of the last commit
+    diff = subprocess.check_output(
+        ["git", "show", "--format=", COMMIT_SHA],
+        text=True
+    )
 
-# 3. Build the prompt
-prompt = f"""
-You are an experienced Python code reviewer.
-Your role is to act as a mentor reviewing code *after* a commit has been made.
+    # 2. Limit diff size to control cost
+    MAX_DIFF_SIZE = 6000
+    if len(diff) > MAX_DIFF_SIZE:
+        diff = diff[:MAX_DIFF_SIZE] + "\n\n[Diff truncated for review]"
 
-RULES:
-- Do NOT write code for the developer
-- Do NOT reimplement features
-- Do NOT provide ready-made solutions
-- Explain issues, risks, and improvement opportunities
-- Focus on learning and reasoning, not on final answers
+    # 3. Build the prompt
+    prompt = f"""
+    You are an experienced Python code reviewer.
+    Your role is to act as a mentor reviewing code *after* a commit has been made.
 
-Analyze ONLY the diff below:
+    RULES:
+    - Do NOT write code for the developer
+    - Do NOT reimplement features
+    - Do NOT provide ready-made solutions
+    - Explain issues, risks, and improvement opportunities
+    - Focus on learning and reasoning, not on final answers
 
-{diff}
-"""
+    Analyze ONLY the diff below:
 
-# 4. Call OpenAI API
-response = requests.post(
-    "https://api.openai.com/v1/chat/completions",
-    headers={
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json",
-    },
-    json={
-        "model": "gpt-4.1-mini",
-        "temperature": 0.3,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-    },
-)
+    {diff}
+    """
 
-review_text = response.json()["choices"][0]["message"]["content"]
+    # 4. Call OpenAI API
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "gpt-4.1-mini",
+                "temperature": 0.3,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+            },
+            timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
 
-# 5. Post comment on the commit
-comment_body = textwrap.dedent(f"""
-### 🤖 AI Code Review
+        if "choices" not in data or not data["choices"]:
+            print("OpenAI returned no choices:", data)
+            return None
 
-This comment was automatically generated **after the commit** with a focus on learning and code quality.
+        review_text = data["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None:
+            print(
+                "OpenAI HTTP error:",
+                e.response.status_code,
+                e.response.text
+            )
+        return None
+    except requests.exceptions.RequestException as e:
+        print("OpenAI request failed:", str(e))
+        return None
+    except Exception as e:
+        print("Unexpected error during OpenAI API call:", str(e))
+        return None
 
----
+    # 5. Post comment on the commit
+    comment_body = textwrap.dedent(f"""
+    ### 🤖 AI Code Review
 
-{review_text}
+    This comment was automatically generated **after the commit** with a focus on learning and code quality.
 
----
+    ---
 
-📌 *Apply the suggestions manually before your next commit.*
-""")
+    {review_text}
 
-requests.post(
-    f"https://api.github.com/repos/{REPO}/commits/{COMMIT_SHA}/comments",
-    headers={
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json",
-    },
-    json={"body": comment_body},
-)
+    ---
 
-print("GitHub response:", response.status_code)
-print(response.text)
+    📌 *Apply the suggestions manually before your next commit.*
+    """)
+
+    requests.post(
+        f"https://api.github.com/repos/{REPO}/commits/{COMMIT_SHA}/comments",
+        headers={
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json",
+        },
+        json={"body": comment_body},
+    )
+
+    print("GitHub response:", response.status_code)
+    print(response.text)
+
+
+if __name__ == "__main__":
+    main()
